@@ -9,7 +9,6 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
-import java.math.BigInteger;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
@@ -145,14 +144,14 @@ public class Huffman {
 
     byte temp = 0x00;
     int currentLength = 0;
-    BigInteger sum = BigInteger.ZERO;
+    long sum = 0;
     for (int i = 0; i < encodeCode.length(); i++) {
       if (currentLength == 8) {
         baos.write(temp);
         temp = 0x00;
         currentLength = 0;
       }
-      sum = sum.add(BigInteger.ONE);
+      sum += 1;
       temp <<= 1;
       if (encodeCode.charAt(i) == '1') {
         temp += 1;
@@ -177,7 +176,7 @@ public class Huffman {
 
   public static class HuffmanConfiguration<T> implements Serializable {
     // 压缩文件的长度，单位是bit
-    public BigInteger size;
+    public long size;
     public EncodeTable<T> encodeTable;
     public Tree<Word<T>> tree;
   }
@@ -188,10 +187,78 @@ public class Huffman {
     String configPath = source + ".config";
     ObjectInputStream ois = new ObjectInputStream(new FileInputStream(configPath));
     HuffmanConfiguration<Byte> huffmanConfiguration = (HuffmanConfiguration<Byte>) ois.readObject();
-    System.out.println("333");
+    ois.close();
 
+    BufferedInputStream bin = new BufferedInputStream(new FileInputStream(source));
+    byte[] bytes = new byte[bin.available()];
+    bin.read(bytes);
+    bin.close();
+
+    byte temp = 0x00;
+    long byteCount = huffmanConfiguration.size / Byte.SIZE;
+    long remainBitCount = huffmanConfiguration.size % Byte.SIZE;
+    StringBuilder sb = new StringBuilder();
+
+    // 以下的代码写的这么复杂，是因为long类型不能作为数组下标
+    long current = 0;
+    for (byte aByte : bytes) {
+      if (current > byteCount) {
+        break;
+      }
+      if (current == byteCount) {
+        temp = aByte;                   // 当完成所有的完整的byte时，将后一个字节（即包含有部分有效位的字节）赋值给temp
+        break;
+      }
+      temp = aByte;
+      for (int i = 0; i < Byte.SIZE; i++) {
+        if ((temp & 0x80) == 0x00) {
+          sb.append("0");
+        } else {
+          sb.append("1");
+        }
+        temp <<= 1;
+      }
+      current++;
+    }
+    for (int i = 0; i < remainBitCount; i++) {
+      if ((temp & 0x80) == 0x00) {
+        sb.append("0");
+      } else {
+        sb.append("1");
+      }
+      temp <<= 1;
+    }
+    String encodeCode = sb.toString();
+    byte[] result = getBytesFromEncode(encodeCode, huffmanConfiguration);
+
+    BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(dist));
+    bos.write(result);
+    bos.close();
 
     return dist;
+  }
+
+  private byte[] getBytesFromEncode(String encodeCode,
+      HuffmanConfiguration<Byte> huffmanConfiguration) {
+
+    Tree<Word<Byte>> tree = huffmanConfiguration.tree;
+
+    Node<Word<Byte>> current = tree.root;
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    for (int i = 0; i < encodeCode.length(); i++) {
+      if (encodeCode.charAt(i) == '0') {
+        current = current.left;
+      } else {
+        current = current.right;
+      }
+      if (current.left == null && current.right == null) {
+        baos.write(current.data.symbol);
+        current = tree.root;
+      }
+    }
+
+    byte[] bytes = baos.toByteArray();
+    return bytes;
   }
 
 }

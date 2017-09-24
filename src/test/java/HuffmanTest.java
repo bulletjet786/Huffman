@@ -39,7 +39,7 @@ public class HuffmanTest {
   }
 
 
-  // yhl.hfm should be 1F00
+  // yhl.hfm should be 7900
   @Test
   public void compressFileTest() throws IOException {    Huffman huffman = new Huffman();
     Byte[] bytes = new Byte[] { 'Y', 'H', 'L'};
